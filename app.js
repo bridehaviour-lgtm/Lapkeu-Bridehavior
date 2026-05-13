@@ -15,13 +15,14 @@ document.getElementById('btn-login').addEventListener('click', async () => {
         document.getElementById('login-container').classList.add('hidden');
         document.getElementById('dashboard-container').classList.remove('hidden');
         await fetchData();
-        switchTab('dashboard');
+        window.switchTab('dashboard');
     } else { 
         alert("PIN Otorisasi Salah!"); 
     }
 });
 
-function switchTab(tabId) {
+// Daftarkan ke window agar bisa dipanggil dari onclick HTML
+window.switchTab = function(tabId) {
     document.querySelectorAll('.tab-content').forEach(el => el.classList.add('hidden'));
     document.querySelectorAll('.tab-btn').forEach(el => {
         el.classList.remove('bg-slate-800', 'text-white', 'border-blue-500');
@@ -44,16 +45,14 @@ function switchTab(tabId) {
     };
     document.getElementById('page-title').innerText = titles[tabId] || 'Dashboard Finance';
     
-    // Auto-close sidebar di tampilan mobile saat tab dipilih
     if (window.innerWidth < 1024) {
         document.getElementById('sidebar').classList.add('-translate-x-full');
         document.getElementById('sidebar-overlay').classList.add('hidden');
     }
 
     if(tabId === 'dashboard') renderDashboard();
-}
+};
 
-// Sidebar Mobile Toggle
 document.getElementById('btn-open-sidebar').addEventListener('click', () => {
     document.getElementById('sidebar').classList.remove('-translate-x-full');
     document.getElementById('sidebar-overlay').classList.remove('hidden');
@@ -85,7 +84,6 @@ async function handleFilter(value, type) {
         if (type === 'month') document.getElementById('global-date').value = '';
         if (type === 'date') document.getElementById('global-month').value = '';
     }
-    
     await fetchData();
 }
 
@@ -103,27 +101,14 @@ async function fetchData() {
             fetch(`${API_URL}?pin=${SECRET_PIN}&action=getCOA`).then(r => r.json())
         ]);
 
-        if (resJurnal.status === 'error') { 
-            console.error('Error Jurnal:', resJurnal.message); 
-            // Jangan alert jika cuma sheet kosong
-        } else {
-            state.jurnal = resJurnal.data || [];
-        }
-
-        if (resDash.status === 'error') { 
-            console.error('Error Dashboard:', resDash.message); 
-        } else {
-            state.dashboard = resDash.summary || { income: 0, expense: 0, netProfit: 0, cashInBank: 0, assets: 0, liabilities: 0, equity: 0 };
-        }
-
-        if (resCoa.status === 'success') {
-            state.coa = resCoa.data || [];
-        }
+        if (resJurnal.status === 'success') state.jurnal = resJurnal.data || [];
+        if (resDash.status === 'success') state.dashboard = resDash.summary || { income: 0, expense: 0, netProfit: 0, cashInBank: 0, assets: 0, liabilities: 0, equity: 0 };
+        if (resCoa.status === 'success') state.coa = resCoa.data || [];
 
         renderAll();
     } catch (e) { 
         console.error("Fetch Error:", e);
-        alert('Gagal mengambil data. Pastikan URL API App Script sudah benar dan sudah di-Deploy New Version.');
+        alert('Gagal mengambil data. Pastikan URL API App Script sudah benar.');
     } finally { 
         if (loadingEl) loadingEl.classList.add('hidden'); 
     }
@@ -152,14 +137,11 @@ function renderDashboard() {
 let cashflowChart;
 function renderChart() {
     let dailyData = {};
-    
-    // Filter lokal untuk chart (memastikan sinkron dengan tabel)
     const filtered = state.jurnal.filter(j => {
         if (!state.activeFilter) return true;
         return String(j.tanggal).startsWith(state.activeFilter);
     });
     
-    // Reverse agar urutan chart dari kiri ke kanan (tanggal lama ke baru)
     [...filtered].reverse().forEach(j => {
         const tgl = j.tanggal || 'Unknown';
         if (!dailyData[tgl]) dailyData[tgl] = { in: 0, out: 0 };
@@ -186,14 +168,7 @@ function renderChart() {
                 { label: 'Uang Keluar', data: dataOut.length > 0 ? dataOut : [0], backgroundColor: '#ef4444', borderRadius: 4 }
             ]
         },
-        options: { 
-            responsive: true, 
-            maintainAspectRatio: false,
-            scales: {
-                y: { grid: { color: '#334155' } },
-                x: { grid: { display: false } }
-            }
-        }
+        options: { responsive: true, maintainAspectRatio: false }
     });
 }
 
@@ -242,7 +217,8 @@ function renderJurnalTable() {
                     <span class="bg-slate-700 px-1.5 py-0.5 rounded text-[9px] mb-1 inline-block">${j.jenisPajak || 'Non-Pajak'}</span><br>
                     ${linkBuktiHTML}
                 </td>
-                <td class="px-3 py-3 align-top text-center">
+                <td class="px-3 py-3 align-top text-center whitespace-nowrap">
+                    <button onclick="editJurnal(${j.rowId})" class="text-blue-500 hover:text-blue-300 text-[10px] font-bold bg-blue-500/10 px-2 py-1 rounded mr-1">Edit</button>
                     <button onclick="deleteJurnal(${j.rowId})" class="text-red-500 hover:text-red-300 text-[10px] font-bold bg-red-500/10 px-2 py-1 rounded">Del</button>
                 </td>
             `;
@@ -251,7 +227,6 @@ function renderJurnalTable() {
     }
 }
 
-// --- RENDER TABEL COA ---
 function renderCOATable() {
     const tbody = document.getElementById('table-body-coa');
     if(!tbody) return;
@@ -268,18 +243,51 @@ function renderCOATable() {
     });
 }
 
-// --- CRUD JURNAL MANUAL ---
-function openJurnalModal() {
+// --- CRUD JURNAL MANUAL (DAFTARKAN KE WINDOW) ---
+window.openJurnalModal = function() {
     document.getElementById('form-jurnal').reset();
     document.getElementById('input-row-id').value = '';
     document.getElementById('input-tgl').value = new Date().toISOString().split('T')[0];
     document.getElementById('modal-jurnal-title').innerText = "Input Jurnal Manual";
     document.getElementById('modal-jurnal').classList.remove('hidden');
-}
+};
 
-function closeJurnalModal() {
+window.closeJurnalModal = function() {
     document.getElementById('modal-jurnal').classList.add('hidden');
-}
+};
+
+window.editJurnal = function(rowId) {
+    const j = state.jurnal.find(x => x.rowId === rowId);
+    if(j) {
+        document.getElementById('input-row-id').value = j.rowId;
+        document.getElementById('input-tgl').value = j.tanggal;
+        document.getElementById('input-ref').value = j.refId;
+        document.getElementById('input-debit').value = j.debit;
+        document.getElementById('input-kredit').value = j.kredit;
+        document.getElementById('input-nominal').value = j.nominal;
+        document.getElementById('input-kategori').value = j.kategori;
+        document.getElementById('input-sub').value = j.subKategori;
+        document.getElementById('input-pajak').value = j.jenisPajak || 'Non-Pajak';
+        document.getElementById('input-project').value = j.project;
+        document.getElementById('input-bukti').value = j.linkBukti !== '-' ? j.linkBukti : '';
+        document.getElementById('input-ket').value = j.keterangan;
+        
+        document.getElementById('modal-jurnal-title').innerText = "Edit Jurnal";
+        document.getElementById('modal-jurnal').classList.remove('hidden');
+    }
+};
+
+window.deleteJurnal = async function(rowId) {
+    if(!confirm("Yakin ingin menghapus jurnal ini secara permanen?")) return;
+    document.getElementById('app-loading').classList.remove('hidden');
+    try {
+        await fetch(API_URL, { method: 'POST', body: JSON.stringify({ pin: SECRET_PIN, action: 'deleteJurnal', rowId }) });
+        await fetchData();
+    } catch(e) { 
+        alert("Gagal menghapus data."); 
+        document.getElementById('app-loading').classList.add('hidden');
+    }
+};
 
 document.getElementById('form-jurnal').addEventListener('submit', async (e) => {
     e.preventDefault();
@@ -308,7 +316,7 @@ document.getElementById('form-jurnal').addEventListener('submit', async (e) => {
 
     try {
         await fetch(API_URL, { method: 'POST', body: JSON.stringify(payload) });
-        closeJurnalModal();
+        window.closeJurnalModal();
         await fetchData(); 
     } catch (error) {
         alert("Gagal menyimpan jurnal. Periksa koneksi Anda.");
@@ -317,18 +325,6 @@ document.getElementById('form-jurnal').addEventListener('submit', async (e) => {
         btn.disabled = false;
     }
 });
-
-async function deleteJurnal(rowId) {
-    if(!confirm("Yakin ingin menghapus jurnal ini secara permanen?")) return;
-    document.getElementById('app-loading').classList.remove('hidden');
-    try {
-        await fetch(API_URL, { method: 'POST', body: JSON.stringify({ pin: SECRET_PIN, action: 'deleteJurnal', rowId }) });
-        await fetchData();
-    } catch(e) { 
-        alert("Gagal menghapus data."); 
-        document.getElementById('app-loading').classList.add('hidden');
-    }
-}
 
 // --- IMPORT / EXPORT CSV ---
 document.getElementById('btn-export').addEventListener('click', () => {
@@ -371,7 +367,6 @@ document.getElementById('import-csv-input').addEventListener('change', function(
 
         let entries = [];
         for (let i = 1; i < lines.length; i++) {
-            // RegEx untuk memisahkan baris CSV dengan aman meskipun ada tanda kutip di keterangannya
             const row = lines[i].match(/(".*?"|[^",\s]+)(?=\s*,|\s*$)/g) || lines[i].split(',');
             const cleanRow = row.map(val => {
                let v = val ? val.trim() : "";
@@ -380,7 +375,6 @@ document.getElementById('import-csv-input').addEventListener('change', function(
             });
             
             if(cleanRow.length >= 5) {
-                // Menyamakan standar format tanggal jika yang diimport menggunakan format DD-MM-YYYY
                 let dateVal = cleanRow[0];
                 if (/^\d{2}-\d{2}-\d{4}$/.test(dateVal)) {
                     let parts = dateVal.split('-');
