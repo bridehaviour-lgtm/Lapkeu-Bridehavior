@@ -1,10 +1,10 @@
+// GANTI DENGAN URL WEB APP YANG BARU ANDA COPY DARI LANGKAH DI ATAS
 const API_URL = 'https://script.google.com/macros/s/AKfycbw60bH24-ThGbqmjV-DFn5cqVxXSzRM2K-6ievdWQ7G2Kgu398aeVoPA71gTgDb0BU/exec'; 
 const SECRET_PIN = '123456'; 
 
 let state = {
-    jurnal: [],
-    coa: [],
-    dashboard: { income: 0, expense: 0, netProfit: 0, cashInBank: 0 },
+    jurnal: [], coa: [],
+    dashboard: { income: 0, expense: 0, netProfit: 0, cashInBank: 0, assets: 0, liabilities: 0, equity: 0 },
     activeFilter: null
 };
 
@@ -32,7 +32,7 @@ document.getElementById('global-date').addEventListener('change', (e) => handleF
 document.getElementById('btn-clear-filter').addEventListener('click', () => handleFilter(null));
 
 async function handleFilter(value) {
-    state.activeFilter = value; // Format: YYYY-MM
+    state.activeFilter = value; 
     const btnClear = document.getElementById('btn-clear-filter');
     if(!value) {
         document.getElementById('global-month').value = '';
@@ -44,10 +44,9 @@ async function handleFilter(value) {
     await fetchData();
 }
 
-// FETCH DATA
+// FETCH DATA DENGAN ERROR HANDLING
 async function fetchData() {
     document.getElementById('app-loading').classList.remove('hidden');
-    // Kirim parameter filter ke backend
     const filterParam = state.activeFilter ? `&filter=${state.activeFilter}` : '';
     
     try {
@@ -57,28 +56,36 @@ async function fetchData() {
             fetch(`${API_URL}?pin=${SECRET_PIN}&action=getCOA`).then(r => r.json())
         ]);
 
+        // Cek jika Backend mengirim pesan Error (Sangat berguna untuk debugging)
+        if (resJurnal.status === 'error') { alert('Error Jurnal: ' + resJurnal.message); return; }
+        if (resDash.status === 'error') { alert('Error Dashboard: ' + resDash.message); return; }
+
         if (resJurnal.status === 'success') state.jurnal = resJurnal.data;
         if (resDash.status === 'success') state.dashboard = resDash.summary;
         if (resCoa.status === 'success') state.coa = resCoa.data;
 
         renderAll();
-    } catch (e) { console.error(e); }
-    finally { document.getElementById('app-loading').classList.add('hidden'); }
+    } catch (e) { 
+        console.error(e);
+        alert('Gagal mengambil data. Pastikan URL API sudah benar dan sudah di-Deploy New Version.'); 
+    } finally { 
+        document.getElementById('app-loading').classList.add('hidden'); 
+    }
 }
 
 function renderAll() {
     renderDashboard();
     renderJurnalTable();
+    renderCOATable();
 }
 
 function renderDashboard() {
-    // Row 1
+    // Terapkan metrik ke ID HTML yang sesuai
     document.getElementById('dash-cash').innerText = formatRp(state.dashboard.cashInBank);
     document.getElementById('dash-income').innerText = formatRp(state.dashboard.income);
     document.getElementById('dash-expense').innerText = formatRp(state.dashboard.expense);
     document.getElementById('dash-profit').innerText = formatRp(state.dashboard.netProfit);
     
-    // Row 2 (New Categories)
     document.getElementById('dash-assets').innerText = formatRp(state.dashboard.assets || 0);
     document.getElementById('dash-liabilities').innerText = formatRp(state.dashboard.liabilities || 0);
     document.getElementById('dash-equity').innerText = formatRp(state.dashboard.equity || 0);
@@ -104,7 +111,7 @@ function renderChart() {
     cashflowChart = new Chart(ctx, {
         type: 'bar',
         data: {
-            labels: labels,
+            labels: labels.length > 0 ? labels : ['Belum ada data'],
             datasets: [
                 { label: 'Uang Masuk', data: labels.map(l => dailyData[l].in), backgroundColor: '#10b981' },
                 { label: 'Uang Keluar', data: labels.map(l => dailyData[l].out), backgroundColor: '#ef4444' }
@@ -131,20 +138,43 @@ function renderJurnalTable() {
                 <td class="px-3 py-3 text-[10px]"><span class="text-blue-400">D:</span> ${j.debit}<br><span class="text-red-400">K:</span> ${j.kredit}</td>
                 <td class="px-3 py-3"><div class="font-bold text-blue-300 text-[10px]">${j.subKategori}</div><div class="text-[9px] text-slate-500">${j.project}</div></td>
                 <td class="px-3 py-3 text-right font-bold text-white text-[11px]">${formatRp(j.nominal)}</td>
-                <td class="px-3 py-3 text-[9px] text-slate-400">${j.jenisPajak}<br>${j.linkBukti !== '-' ? '<a href="'+j.linkBukti+'" target="_blank" class="text-blue-400 underline">Bukti</a>' : '-'}</td>
-                <td class="px-3 py-3 text-center"><button onclick="deleteJurnal(${j.rowId})" class="text-red-500 text-[10px]">Del</button></td>
+                <td class="px-3 py-3 text-[9px] text-slate-400">${j.jenisPajak}<br>${j.linkBukti && j.linkBukti !== '-' ? '<a href="'+j.linkBukti+'" target="_blank" class="text-blue-400 underline">Bukti</a>' : '-'}</td>
+                <td class="px-3 py-3 text-center"><button onclick="deleteJurnal(${j.rowId})" class="text-red-500 text-[10px] hover:text-white">Del</button></td>
             `;
             tbody.appendChild(tr);
         });
     }
 }
 
+function renderCOATable() {
+    const tbody = document.getElementById('table-body-coa');
+    tbody.innerHTML = '';
+    state.coa.forEach(c => {
+        const badge = c.isTaxDeductible 
+            ? `<span class="bg-green-900/50 text-green-400 px-2 py-0.5 rounded text-[10px]">Ya (Deductible)</span>`
+            : `<span class="bg-red-900/50 text-red-400 px-2 py-0.5 rounded text-[10px]">Koreksi Fiskal</span>`;
+        const tr = document.createElement('tr');
+        tr.className = "border-b border-slate-800";
+        tr.innerHTML = `<td class="px-4 py-2 font-medium text-white">${c.kategori}</td><td class="px-4 py-2 text-slate-300">${c.sub}</td><td class="px-4 py-2 text-center">${badge}</td>`;
+        tbody.appendChild(tr);
+    });
+}
+
+// ... Sisanya tetap sama untuk logika modal (openJurnalModal, closeJurnalModal, dll) ...
+// (Pastikan Anda tetap memakai logika modal dari kode sebelumnya jika diperlukan, 
+// atau Anda cukup mereplace logic fetch dan rendering di atas).
+
 async function deleteJurnal(rowId) {
-    if(!confirm("Hapus data ini?")) return;
-    await fetch(API_URL, { method: 'POST', body: JSON.stringify({ pin: SECRET_PIN, action: 'deleteJurnal', rowId }) });
-    fetchData();
+    if(!confirm("Hapus data ini secara permanen?")) return;
+    document.getElementById('app-loading').classList.remove('hidden');
+    try {
+        await fetch(API_URL, { method: 'POST', body: JSON.stringify({ pin: SECRET_PIN, action: 'deleteJurnal', rowId }) });
+        await fetchData();
+    } catch(e) { alert("Gagal menghapus data."); }
 }
 
 function formatRp(angka) {
     return 'Rp ' + Number(angka).toLocaleString('id-ID');
 }
+
+document.getElementById('btn-refresh').addEventListener('click', fetchData);
