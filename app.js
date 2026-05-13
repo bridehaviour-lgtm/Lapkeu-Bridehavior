@@ -72,10 +72,17 @@ function renderAll() {
 }
 
 function renderDashboard() {
+    // Row 1
     document.getElementById('dash-cash').innerText = formatRp(state.dashboard.cashInBank);
     document.getElementById('dash-income').innerText = formatRp(state.dashboard.income);
     document.getElementById('dash-expense').innerText = formatRp(state.dashboard.expense);
     document.getElementById('dash-profit').innerText = formatRp(state.dashboard.netProfit);
+    
+    // Row 2 (New Categories)
+    document.getElementById('dash-assets').innerText = formatRp(state.dashboard.assets || 0);
+    document.getElementById('dash-liabilities').innerText = formatRp(state.dashboard.liabilities || 0);
+    document.getElementById('dash-equity').innerText = formatRp(state.dashboard.equity || 0);
+    
     renderChart();
 }
 
