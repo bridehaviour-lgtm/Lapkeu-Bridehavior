@@ -172,7 +172,7 @@ function renderChart() {
     });
 }
 
-// --- RENDER TABEL JURNAL UMUM ---
+// --- RENDER TABEL JURNAL UMUM (DENGAN TOMBOL EDIT) ---
 function renderJurnalTable() {
     const tbody = document.getElementById('table-body-jurnal');
     const emptyState = document.getElementById('empty-state-jurnal');
